@@ -37,15 +37,17 @@ spec:
               DEVICE="{{ .path }}"
               FILE="{{ .file }}"
               SIZE_MB="{{ .sizeMB }}"
-              DIR=$(dirname "$FILE")
-              mkdir -p "$DIR"
               if losetup "$DEVICE" 2>/dev/null; then
-                echo "$DEVICE already attached, detaching first"
-                losetup -d "$DEVICE"
+                echo "$DEVICE already attached, skipping"
+              else
+                DIR=$(dirname "$FILE")
+                mkdir -p "$DIR"
+                if [ ! -f "$FILE" ]; then
+                  dd if=/dev/zero of="$FILE" bs=1M seek="$SIZE_MB" count=0
+                fi
+                losetup "$DEVICE" "$FILE"
+                echo "$DEVICE attached to $FILE (${SIZE_MB}MB sparse)"
               fi
-              dd if=/dev/zero of="$FILE" bs=1M seek="$SIZE_MB" count=0
-              losetup "$DEVICE" "$FILE"
-              echo "$DEVICE attached to $FILE (${SIZE_MB}MB sparse)"
               {{- end }}
               echo "All devices ready"
               exec sleep infinity
