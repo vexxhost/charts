@@ -1,0 +1,39 @@
+name: Publish
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "charts/**"
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+
+      - name: Login to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      - name: Package and push charts
+        run: |
+          for chart_dir in charts/*/; do
+            if [ -f "$chart_dir/Chart.yaml" ]; then
+              chart_name=$(basename "$chart_dir")
+              echo "Packaging $chart_name..."
+              helm package "$chart_dir" -d /tmp/helm-charts
+            fi
+          done
+          for pkg in /tmp/helm-charts/*.tgz; do
+            echo "Pushing $pkg..."
+            helm push "$pkg" oci://ghcr.io/vexxhost/charts
+          done
