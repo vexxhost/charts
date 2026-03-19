@@ -1,0 +1,86 @@
+name: Test
+
+on:
+  pull_request:
+    paths:
+      - "charts/**"
+      - "ct.yaml"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+
+      - name: Create kind cluster
+        uses: helm/kind-action@v1
+
+      - name: Install loopback-block chart
+        run: |
+          helm install loopback-block charts/loopback-block/ \
+            -f charts/loopback-block/ci/test-values.yaml \
+            --namespace kube-system
+          kubectl -n kube-system rollout status daemonset/loopback-block --timeout=60s
+
+      - name: Install rook-ceph operator
+        run: |
+          helm repo add rook-release https://charts.rook.io/release
+          helm install rook-ceph rook-release/rook-ceph \
+            --namespace rook-ceph \
+            --create-namespace \
+            --set csi.enableRbdDriver=false \
+            --set csi.enableCephfsDriver=false \
+            --set allowLoopDevices=true \
+            --wait \
+            --timeout=5m
+
+      - name: Deploy CephCluster
+        run: |
+          cat <<'EOF' | kubectl apply -f -
+          apiVersion: ceph.rook.io/v1
+          kind: CephCluster
+          metadata:
+            name: rook-ceph
+            namespace: rook-ceph
+          spec:
+            cephVersion:
+              image: quay.io/ceph/ceph:v19
+              allowUnsupported: true
+            dataDirHostPath: /var/lib/rook
+            mon:
+              count: 1
+              allowMultiplePerNode: true
+            mgr:
+              count: 1
+              allowMultiplePerNode: true
+            dashboard:
+              enabled: false
+            storage:
+              useAllNodes: true
+              useAllDevices: false
+              devices:
+                - name: loop0
+          EOF
+
+      - name: Wait for OSD
+        run: |
+          echo "Waiting for OSD pod to start..."
+          for i in $(seq 1 60); do
+            OSD_COUNT=$(kubectl -n rook-ceph get pod -l app=rook-ceph-osd --field-selector=status.phase=Running --no-headers 2>/dev/null | wc -l)
+            if [ "$OSD_COUNT" -ge 1 ]; then
+              echo "OSD pod is running (count: $OSD_COUNT)"
+              kubectl -n rook-ceph get pod -l app=rook-ceph-osd
+              exit 0
+            fi
+            echo "Attempt $i/60: OSD not ready yet (running: $OSD_COUNT)"
+            sleep 10
+          done
+          echo "ERROR: OSD pod did not start within timeout"
+          kubectl -n rook-ceph get pods
+          kubectl -n rook-ceph describe pods -l app=rook-ceph-osd-prepare
+          exit 1
