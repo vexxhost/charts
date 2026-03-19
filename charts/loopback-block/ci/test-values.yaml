@@ -1,0 +1,6 @@
+devices:
+  - path: /dev/loop0
+    file: /var/lib/loopback-block/loop0.img
+    sizeMB: 5120
+
+affinity: {}
