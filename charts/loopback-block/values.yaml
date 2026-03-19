@@ -1,0 +1,28 @@
+image:
+  repository: busybox
+  tag: latest
+
+devices:
+  - path: /dev/loop0
+    file: /var/lib/loopback-block/loop0.img
+    sizeMB: 10240
+
+nodeSelector: {}
+
+affinity:
+  nodeAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: node-role.kubernetes.io/control-plane
+              operator: DoesNotExist
+
+tolerations:
+  - operator: Exists
+
+resources:
+  requests:
+    cpu: 10m
+    memory: 16Mi
+  limits:
+    memory: 32Mi

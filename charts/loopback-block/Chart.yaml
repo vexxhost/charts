@@ -1,0 +1,5 @@
+apiVersion: v2
+name: loopback-block
+description: Creates loopback block devices on Kubernetes worker nodes for Rook-Ceph OSDs
+type: application
+version: 0.1.0
