@@ -1,0 +1,68 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: {{ include "loopback-block.fullname" . }}
+  labels:
+    {{- include "loopback-block.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "loopback-block.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "loopback-block.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: loopback-setup
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+              {{- range .Values.devices }}
+              DEVICE="{{ .path }}"
+              FILE="{{ .file }}"
+              SIZE_MB="{{ .sizeMB }}"
+              DIR=$(dirname "$FILE")
+              mkdir -p "$DIR"
+              if losetup "$DEVICE" 2>/dev/null; then
+                echo "$DEVICE already attached, detaching first"
+                losetup -d "$DEVICE"
+              fi
+              dd if=/dev/zero of="$FILE" bs=1M seek="$SIZE_MB" count=0
+              losetup "$DEVICE" "$FILE"
+              echo "$DEVICE attached to $FILE (${SIZE_MB}MB sparse)"
+              {{- end }}
+              echo "All devices ready"
+              exec sleep infinity
+          securityContext:
+            privileged: true
+          volumeMounts:
+            - name: dev
+              mountPath: /dev
+            - name: backing-store
+              mountPath: /var/lib/loopback-block
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      volumes:
+        - name: dev
+          hostPath:
+            path: /dev
+        - name: backing-store
+          hostPath:
+            path: /var/lib/loopback-block
+            type: DirectoryOrCreate
