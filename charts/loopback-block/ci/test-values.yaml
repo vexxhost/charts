@@ -1,6 +1,6 @@
 devices:
-  - path: /dev/loop0
-    file: /var/lib/loopback-block/loop0.img
+  - path: /dev/loop100
+    file: /var/lib/loopback-block/loop100.img
     sizeMB: 5120
 
-affinity: {}
+affinity: null

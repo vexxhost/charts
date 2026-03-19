@@ -64,7 +64,7 @@ jobs:
               useAllNodes: true
               useAllDevices: false
               devices:
-                - name: loop0
+                - name: loop100
           EOF
 
       - name: Wait for OSD
