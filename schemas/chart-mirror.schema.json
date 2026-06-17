@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/vexxhost/charts/schemas/chart-mirror.schema.json",
+  "title": "Chart Mirror Manifest",
+  "description": "Schema for Helm chart mirror manifests that define how external charts are copied into ghcr.io/vexxhost/charts",
+  "type": "object",
+  "required": ["source", "destination", "versions"],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "YAML language server schema reference"
+    },
+    "source": {
+      "type": "object",
+      "description": "Source registry and repository for the upstream chart",
+      "required": ["type", "repository"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["helm-oci"],
+          "description": "Source artifact type"
+        },
+        "repository": {
+          "type": "string",
+          "description": "OCI repository URI for the source chart (without tag)",
+          "pattern": "^[-a-zA-Z0-9._/]+$"
+        }
+      },
+      "additionalProperties": false
+    },
+    "destination": {
+      "type": "object",
+      "description": "Destination repository under ghcr.io/vexxhost/charts",
+      "required": ["repository"],
+      "properties": {
+        "repository": {
+          "type": "string",
+          "description": "OCI repository URI for the mirrored chart (without tag)",
+          "pattern": "^ghcr\\.io/vexxhost/charts/[a-z0-9-]+$"
+        }
+      },
+      "additionalProperties": false
+    },
+    "versions": {
+      "type": "array",
+      "description": "Chart versions to mirror (v-prefixed semver tags)",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "pattern": "^v\\d+\\.\\d+\\.\\d+$"
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "description": "Helm provenance verification configuration",
+      "required": ["keyring"],
+      "properties": {
+        "keyring": {
+          "type": "string",
+          "description": "Path (relative to repo root, no .. traversal) or URL to the GPG keyring used to verify Helm provenance"
+        },
+        "required": {
+          "type": "boolean",
+          "description": "Whether provenance verification is required (defaults to true)",
+          "default": true
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

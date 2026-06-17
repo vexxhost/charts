@@ -1,0 +1,96 @@
+name: Mirror
+
+on:
+  pull_request:
+    paths:
+      - "mirrors/**"
+      - "schemas/**"
+      - "hack/mirror_charts.py"
+      - ".github/workflows/mirror.yaml"
+  push:
+    branches:
+      - main
+    paths:
+      - "mirrors/**"
+      - "schemas/**"
+      - "hack/mirror_charts.py"
+      - ".github/workflows/mirror.yaml"
+  workflow_dispatch:
+    inputs:
+      chart:
+        description: "Chart to mirror (name only, e.g. cert-manager)"
+        required: false
+        type: string
+      version:
+        description: "Version tag to mirror (e.g. v1.15.5)"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Install Helm
+        uses: azure/setup-helm@dda3372f752e03dde6b3237bc9431cdc2f7a02a2 # v5.0.0
+
+      - name: Install ORAS
+        uses: oras-project/setup-oras@38de303aac69abb66f3e6255b7198bff35f323e3 # v2.0.0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+
+      - name: Validate manifests and verify provenance
+        run: uv run hack/mirror_charts.py --dry-run
+
+  mirror:
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    env:
+      MIRROR_CHART: ${{ inputs.chart }}
+      MIRROR_VERSION: ${{ inputs.version }}
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Install Helm
+        uses: azure/setup-helm@dda3372f752e03dde6b3237bc9431cdc2f7a02a2 # v5.0.0
+
+      - name: Install ORAS
+        uses: oras-project/setup-oras@38de303aac69abb66f3e6255b7198bff35f323e3 # v2.0.0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@2e2f661cd4be3a4b891a882064e49d0fed4b7b88 # v3.9.0
+
+      - name: Login to GHCR
+        uses: docker/login-action@74a5d142397b44f367a81961eba4e8cd7edddf772 # v3.4.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Mirror charts
+        run: uv run hack/mirror_charts.py
