@@ -1,0 +1,12 @@
+# yaml-language-server: $schema=../schemas/chart-mirror.schema.json
+source:
+  type: helm-oci
+  repository: quay.io/jetstack/charts/cert-manager
+destination:
+  repository: ghcr.io/vexxhost/charts/cert-manager
+versions:
+  - v1.11.5
+  - v1.15.5
+provenance:
+  keyring: https://cert-manager.io/public-keys/cert-manager-keyring-2021-09-20-1020CF3C033D4F35BAE1C19E1226061C665DF13E.gpg
+  required: true
