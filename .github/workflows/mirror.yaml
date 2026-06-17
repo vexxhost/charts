@@ -52,7 +52,7 @@ jobs:
           nix_path: nixpkgs=channel:nixos-unstable
 
       - name: Cache Nix store
-        uses: DeterminateSystems/magic-nix-cache-action@6221693898146dc97e38ad0e013488a16477a4c4 # v9
+        uses: DeterminateSystems/magic-nix-cache-action@908b263ff629f4cc17666315b7fd3ec127c6244d # v14
 
       - name: Validate manifests and verify provenance
         run: nix develop --command uv run hack/mirror_charts.py --dry-run
@@ -82,7 +82,7 @@ jobs:
           nix_path: nixpkgs=channel:nixos-unstable
 
       - name: Cache Nix store
-        uses: DeterminateSystems/magic-nix-cache-action@6221693898146dc97e38ad0e013488a16477a4c4 # v9
+        uses: DeterminateSystems/magic-nix-cache-action@908b263ff629f4cc17666315b7fd3ec127c6244d # v14
 
       - name: Login to GHCR
         uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
