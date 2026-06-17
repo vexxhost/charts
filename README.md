@@ -72,16 +72,23 @@ kind delete cluster
 
 ### Mirror manifests
 
+The flake provides all required tools.  Use `nix develop` to enter a shell with
+`uv`, `helm`, `oras`, and `cosign`:
+
+```bash
+nix develop
+```
+
 Validate mirror manifests locally:
 
 ```bash
-nix-shell -p uv kubernetes-helm oras cosign --run "uv run hack/mirror_charts.py --validate-only"
+nix develop --command uv run hack/mirror_charts.py --validate-only
 ```
 
 Dry-run the mirror process (resolves sources, verifies provenance, skips writes):
 
 ```bash
-nix-shell -p uv kubernetes-helm oras cosign --run "uv run hack/mirror_charts.py --dry-run --chart cert-manager"
+nix develop --command uv run hack/mirror_charts.py --dry-run --chart cert-manager
 ```
 
 ### Adding a new mirror

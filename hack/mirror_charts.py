@@ -116,21 +116,16 @@ def fetch_keyring(keyring: str) -> Path:
         return path
 
 
-def helm_verify(repository: str, version: str, keyring: str) -> str | None:
+def helm_verify(repository: str, version: str, keyring: str) -> None:
     """Pull the chart from *repository* and verify its Helm provenance.
 
     Uses ``helm pull --prov --verify`` and the supplied keyring.
     The downloaded chart archive is discarded (stored in a temp directory).
-
-    Returns the resolved digest (``sha256:...``) as reported by Helm,
-    or ``None`` if the output could not be parsed.  The caller MUST
-    compare this against the digest from ``oras_resolve`` to close the
-    TOCTOU window between resolution and verification.
     """
     keyring_path = fetch_keyring(keyring)
     oci_ref = f"oci://{repository}"
     with tempfile.TemporaryDirectory() as tmpdir:
-        result = run(
+        run(
             [
                 "helm", "pull", oci_ref,
                 "--version", version,
@@ -141,11 +136,6 @@ def helm_verify(repository: str, version: str, keyring: str) -> str | None:
             ],
             timeout=SUBCOMMAND_TIMEOUT,
         )
-    # Helm prints "Digest: sha256:..." to stderr on successful pull.
-    for line in result.stderr.splitlines():
-        if line.startswith("Digest:"):
-            return line.split(":", 1)[1].strip()
-    return None
 
 
 def oras_copy(source_ref: str, dest_ref: str) -> None:
@@ -309,18 +299,25 @@ def main() -> None:
                     continue
                 print(f"  verifying provenance (keyring={keyring})")
                 try:
-                    verified_digest = helm_verify(source_repo, ver, keyring)
+                    helm_verify(source_repo, ver, keyring)
                 except SystemExit:
                     errors.append(f"{chart_name} {ver}: provenance verification failed")
                     continue
-                if verified_digest and verified_digest != source_digest:
+                # Re-resolve after verification to detect TOCTOU: if the tag
+                # was repointed between the initial resolve and the helm pull,
+                # the digest will differ.
+                try:
+                    post_verify_ref = oras_resolve(source_repo, ver)
+                except SystemExit:
+                    errors.append(f"{chart_name} {ver}: post-verification resolve failed")
+                    continue
+                post_verify_digest = post_verify_ref.split("@")[-1]
+                if post_verify_digest != source_digest:
                     errors.append(
-                        f"{chart_name} {ver}: verified digest {verified_digest} does not match "
-                        f"resolved digest {source_digest}; tag may have been repointed"
+                        f"{chart_name} {ver}: tag repointed during verification "
+                        f"(was {source_digest}, now {post_verify_digest})"
                     )
                     continue
-                if not verified_digest:
-                    print("    warning: could not parse verified digest from Helm output")
                 print("    provenance OK")
             elif provenance:
                 print("  provenance: verification not required (required: false), skipping")
@@ -334,6 +331,14 @@ def main() -> None:
                     ["oras", "resolve", dest_tag_ref],
                     cwd=REPO_ROOT, text=True, capture_output=True, timeout=SUBCOMMAND_TIMEOUT,
                 )
+                if dest_exists.returncode != 0 and dest_exists.returncode != 1:
+                    # Exit 1 = tag not found (safe to proceed).  Anything else is
+                    # a network or auth error — fail closed.
+                    errors.append(
+                        f"{chart_name} {ver}: destination resolve failed "
+                        f"(exit {dest_exists.returncode}): {dest_exists.stderr.strip()}"
+                    )
+                    continue
                 if dest_exists.returncode == 0:
                     existing_digest = dest_exists.stdout.strip().split("@")[-1]
                     if existing_digest == source_digest:
