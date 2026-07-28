@@ -1,0 +1,15 @@
+{{- if .Values.crds.create }}
+{{- range $path, $_ := .Files.Glob "files/crds/*.yml" }}
+{{- $crd := $.Files.Get $path | fromYaml }}
+{{- $metadata := get $crd "metadata" }}
+{{- $annotations := get $metadata "annotations" | default dict }}
+{{- range $key, $value := $.Values.crds.annotations }}
+{{- $_ := set $annotations $key $value }}
+{{- end }}
+{{- $_ := set $annotations "helm.sh/resource-policy" "keep" }}
+{{- $_ := set $metadata "annotations" $annotations }}
+{{- $_ := set $crd "metadata" $metadata }}
+---
+{{ toYaml $crd }}
+{{- end }}
+{{- end }}

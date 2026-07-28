@@ -1,0 +1,17 @@
+apiVersion: v2
+name: keycloak-operator
+description: A Helm chart for the Keycloak Operator
+type: application
+version: 0.1.0
+appVersion: 26.6.4
+home: https://www.keycloak.org/operator/installation
+sources:
+  - https://github.com/keycloak/keycloak
+  - https://github.com/keycloak/keycloak-k8s-resources
+keywords:
+  - keycloak
+  - identity
+  - operator
+maintainers:
+  - name: VEXXHOST, Inc.
+    url: https://vexxhost.com

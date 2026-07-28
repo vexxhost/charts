@@ -130,3 +130,64 @@ jobs:
             -l app.kubernetes.io/instance=loopback-block \
             --all-containers=true --prefix=true || true
           exit 1
+
+  keycloak-operator:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Install Helm
+        uses: azure/setup-helm@dda3372f752e03dde6b3237bc9431cdc2f7a02a2 # v5.0.0
+
+      - name: Create kind cluster
+        uses: helm/kind-action@ef37e7f390d99f746eb8b610417061a60e82a6cc # v1.14.0
+        with:
+          cluster_name: chart-testing-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Install Keycloak Operator chart
+        run: |
+          helm install keycloak-operator charts/keycloak-operator \
+            --namespace auth-system \
+            --create-namespace \
+            --values charts/keycloak-operator/ci/test-values.yaml \
+            --wait \
+            --timeout 5m
+          kubectl wait \
+            --for=condition=Established \
+            crd/keycloaks.k8s.keycloak.org \
+            crd/keycloakrealmimports.k8s.keycloak.org \
+            --timeout=60s
+          kubectl rollout status \
+            deployment/keycloak-operator \
+            --namespace auth-system \
+            --timeout=5m
+
+      - name: Verify CRDs are upgraded
+        run: |
+          helm upgrade keycloak-operator charts/keycloak-operator \
+            --namespace auth-system \
+            --reuse-values \
+            --set-string 'crds.annotations.charts\.vexxhost\.com/upgrade-test=after' \
+            --wait \
+            --timeout 5m
+          for crd in \
+            keycloaks.k8s.keycloak.org \
+            keycloakrealmimports.k8s.keycloak.org; do
+            annotation=$(kubectl get crd "$crd" \
+              --output go-template='{{ index .metadata.annotations "charts.vexxhost.com/upgrade-test" }}')
+            test "$annotation" = "after"
+          done
+
+      - name: Verify CRDs are retained after uninstall
+        run: |
+          helm uninstall keycloak-operator --namespace auth-system
+          kubectl get crd \
+            keycloaks.k8s.keycloak.org \
+            keycloakrealmimports.k8s.keycloak.org

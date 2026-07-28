@@ -6,6 +6,7 @@ Helm charts published as OCI artifacts to `ghcr.io/vexxhost/charts`.
 
 | Chart | Description |
 |-------|-------------|
+| [keycloak-operator](charts/keycloak-operator/) | Installs the Keycloak Operator and its upgradeable CRDs |
 | [loopback-block](charts/loopback-block/) | Creates loopback block devices for Rook-Ceph OSDs |
 
 ## Mirrored Charts
