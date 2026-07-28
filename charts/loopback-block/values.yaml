@@ -1,6 +1,7 @@
 image:
-  repository: busybox
-  tag: latest
+  repository: docker.io/library/debian
+  tag: trixie-slim
+  pullPolicy: IfNotPresent
 
 devices:
   - path: /dev/loop0

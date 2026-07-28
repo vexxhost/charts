@@ -1,5 +1,9 @@
 apiVersion: v2
 name: loopback-block
-description: Creates loopback block devices on Kubernetes worker nodes for Rook-Ceph OSDs
+description: >-
+  Creates loopback block devices on Kubernetes worker nodes for Rook-Ceph OSDs
 type: application
-version: 0.1.0
+version: 0.1.1
+maintainers:
+  - name: VEXXHOST
+    url: https://vexxhost.com
