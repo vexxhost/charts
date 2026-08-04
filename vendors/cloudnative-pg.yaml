@@ -1,0 +1,24 @@
+# yaml-language-server: $schema=../schemas/chart-vendor.schema.json
+name: cloudnative-pg
+upstreamVersion: 0.27.1
+destination: charts/cloudnative-pg
+source:
+  chart:
+    url: https://github.com/cloudnative-pg/charts/releases/download/cloudnative-pg-v0.27.1/cloudnative-pg-0.27.1.tgz
+    sha256: 67d7189f93219d355630ff7690169121cf606e67ac84abe05c53f88788de9d49
+  provenance:
+    url: https://github.com/cloudnative-pg/charts/releases/download/cloudnative-pg-v0.27.1/cloudnative-pg-0.27.1.tgz.prov
+    sha256: e70550f1daba8dd54f6e20921fba25b9f5ee55a4123b88800c81c19901a6d78f
+  key:
+    url: https://raw.githubusercontent.com/cloudnative-pg/charts/cloudnative-pg-v0.27.1/provenance.gpg
+    sha256: e7c84e9c8961ac7adc884f93cab54ec406b30cf47d817dae34486436c4148dc3
+    fingerprint: 699875E68BBFC9800CBD86AEE3C68F93B50C5EC0
+references:
+  - name: cnpg-1.28.4.yaml
+    url: https://github.com/cloudnative-pg/cloudnative-pg/releases/download/v1.28.4/cnpg-1.28.4.yaml
+    sha256: 8f24b9163df8ff771fc398de885e6c4052f31a1289f921f9d23024eff5e8ebbe
+crdReference: cnpg-1.28.4.yaml
+patches:
+  - vendors/cloudnative-pg/patches/0001-set-downstream-version.patch
+  - vendors/cloudnative-pg/patches/0002-add-endpointslices-permissions.patch
+  - vendors/cloudnative-pg/patches/0003-align-crds-with-cloudnative-pg-1.28.4.patch

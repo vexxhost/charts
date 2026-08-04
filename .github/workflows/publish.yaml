@@ -1,19 +1,80 @@
 name: Publish
 
 on:
+  pull_request:
+    paths:
+      - "charts/**"
+      - "hack/publish_charts.py"
+      - ".github/workflows/publish.yaml"
   push:
     branches:
       - main
     paths:
       - "charts/**"
+      - "hack/publish_charts.py"
+      - ".github/workflows/publish.yaml"
+
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
 
 permissions:
   contents: read
-  packages: write
 
 jobs:
-  publish:
+  discover:
     runs-on: ubuntu-latest
+    outputs:
+      charts: ${{ steps.changes.outputs.charts }}
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          fetch-depth: 0
+
+      - name: Discover changed charts
+        id: changes
+        env:
+          BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+        run: |
+          if [[ "$BASE_SHA" =~ ^0+$ ]]; then
+            BASE_SHA=$(git hash-object -t tree /dev/null)
+          fi
+          mapfile -t changed_charts < <(
+            git diff --name-only "$BASE_SHA" "$HEAD_SHA" -- charts | \
+              awk -F/ 'NF >= 3 { print $1 "/" $2 }' | \
+              sort -u
+          )
+          charts=()
+          for chart in "${changed_charts[@]}"; do
+            if [[ -f "$chart/Chart.yaml" ]]; then
+              charts+=("$chart")
+            fi
+          done
+          json=$(printf '%s\n' "${charts[@]}" | jq -Rsc 'split("\n") | map(select(length > 0))')
+          echo "charts=$json" >> "$GITHUB_OUTPUT"
+          echo "Changed charts: $json"
+
+      - name: Validate publishing script syntax
+        run: python3 -m py_compile hack/publish_charts.py
+
+  preflight:
+    if: github.event_name == 'pull_request' && needs.discover.outputs.charts != '[]'
+    needs: discover
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    strategy:
+      fail-fast: false
+      matrix:
+        chart: ${{ fromJSON(needs.discover.outputs.charts) }}
     steps:
       - name: Harden the runner (Audit all outbound calls)
         uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
@@ -23,22 +84,73 @@ jobs:
       - name: Checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 
-      - name: Install Helm
-        uses: azure/setup-helm@dda3372f752e03dde6b3237bc9431cdc2f7a02a2 # v5.0.0
+      - name: Install Nix
+        uses: cachix/install-nix-action@8aa03977d8d733052d78f4e008a241fd1dbf36b3 # v31
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
+
+      - name: Cache Nix store
+        uses: DeterminateSystems/magic-nix-cache-action@908b263ff629f4cc17666315b7fd3ec127c6244d # v14
 
       - name: Login to GHCR
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ghcr.io -u ${{ github.actor }} --password-stdin
+        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Package and push charts
+      - name: Check destination tag
+        run: >-
+          nix develop --command uv run hack/publish_charts.py
+          --chart "${{ matrix.chart }}" --check-only
+
+  publish:
+    if: github.event_name == 'push' && needs.discover.outputs.charts != '[]'
+    needs: discover
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        chart: ${{ fromJSON(needs.discover.outputs.charts) }}
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@8aa03977d8d733052d78f4e008a241fd1dbf36b3 # v31
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
+
+      - name: Cache Nix store
+        uses: DeterminateSystems/magic-nix-cache-action@908b263ff629f4cc17666315b7fd3ec127c6244d # v14
+
+      - name: Login to GHCR
+        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify vendored source
         run: |
-          for chart_dir in charts/*/; do
-            if [ -f "$chart_dir/Chart.yaml" ]; then
-              chart_name=$(basename "$chart_dir")
-              echo "Packaging $chart_name..."
-              helm package "$chart_dir" -d /tmp/helm-charts
-            fi
-          done
-          for pkg in /tmp/helm-charts/*.tgz; do
-            echo "Pushing $pkg..."
-            helm push "$pkg" oci://ghcr.io/vexxhost/charts
-          done
+          chart_name=$(basename "${{ matrix.chart }}")
+          if [[ -f "vendors/$chart_name.yaml" ]]; then
+            nix develop --command uv run hack/vendor_charts.py \
+              --chart "$chart_name" \
+              --check
+          fi
+
+      - name: Publish and sign chart
+        id: publish
+        run: >-
+          nix develop --command uv run hack/publish_charts.py
+          --chart "${{ matrix.chart }}"

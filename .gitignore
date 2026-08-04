@@ -1,3 +1,6 @@
 *.tgz
 charts/*/charts/
+!charts/cloudnative-pg/charts/
+!charts/cloudnative-pg/charts/**
+charts/cloudnative-pg/charts/*.tgz
 __pycache__/

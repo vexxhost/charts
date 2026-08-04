@@ -1,0 +1,3 @@
+# Vendored sources and patch files preserve upstream whitespace verbatim.
+charts/cloudnative-pg/** -whitespace
+vendors/**/*.patch -whitespace

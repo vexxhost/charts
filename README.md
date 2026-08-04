@@ -6,8 +6,29 @@ Helm charts published as OCI artifacts to `ghcr.io/vexxhost/charts`.
 
 | Chart | Description |
 |-------|-------------|
+| [cloudnative-pg](charts/cloudnative-pg/) | Patched CloudNativePG operator 1.28.4 based on upstream chart 0.27.1 |
 | [keycloak-operator](charts/keycloak-operator/) | Installs the Keycloak Operator and its upgradeable CRDs |
 | [loopback-block](charts/loopback-block/) | Creates loopback block devices for Rook-Ceph OSDs |
+
+## Vendored Charts
+
+Patched upstream charts are generated from manifests under `vendors/`. Each
+manifest pins the upstream chart archive, Helm provenance, signing key, source
+references, and ordered patch series. Generated charts are committed under
+`charts/` and published through the same signed, immutable OCI workflow as
+authored charts.
+
+Regenerate all vendored charts:
+
+```bash
+nix develop --command uv run hack/vendor_charts.py
+```
+
+Verify that committed charts reproduce from their pinned inputs:
+
+```bash
+nix develop --command uv run hack/vendor_charts.py --check
+```
 
 ## Mirrored Charts
 
@@ -51,7 +72,7 @@ Verify the VEXXHOST cosign signature:
 
 ```bash
 cosign verify ghcr.io/vexxhost/charts/cert-manager@sha256:<digest> \
-  --certificate-identity-regexp '^https://github.com/vexxhost/charts/.github/workflows/mirror.yaml@refs/heads/main$' \
+  --certificate-identity-regexp '^https://github\.com/vexxhost/charts/\.github/workflows/mirror\.yaml@refs/heads/main$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
 
@@ -66,10 +87,14 @@ ct lint --config ct.yaml
 Run integration tests with kind:
 
 ```bash
-kind create cluster
+kind create cluster --name chart-testing
 ct install --config ct.yaml
-kind delete cluster
+kind delete cluster --name chart-testing
 ```
+
+Authored and patched-vendor chart versions are immutable after publication.
+Any content change requires a `Chart.yaml` version increment. The publishing
+workflow reports the resolved OCI digest and signs that digest with cosign.
 
 ### Mirror manifests
 

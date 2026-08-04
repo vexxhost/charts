@@ -152,9 +152,10 @@ def cosign_sign(repository: str, digest: str) -> None:
     ref = f"{repository}@{digest}"
     verify = subprocess.run(
         ["cosign", "verify", ref,
-         "--certificate-identity-regexp", "^https://github.com/vexxhost/charts/.github/workflows/mirror.yaml@refs/heads/main$",
+         "--certificate-identity-regexp", r"^https://github\.com/vexxhost/charts/\.github/workflows/mirror\.yaml@refs/heads/main$",
          "--certificate-oidc-issuer", "https://token.actions.githubusercontent.com"],
-        cwd=REPO_ROOT, text=True, capture_output=True, timeout=SUBCOMMAND_TIMEOUT,
+        cwd=REPO_ROOT, text=True, capture_output=True, check=False,
+        timeout=SUBCOMMAND_TIMEOUT,
     )
     if verify.returncode == 0:
         print("    cosign signature already present, skipping")
