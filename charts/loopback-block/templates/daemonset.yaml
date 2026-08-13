@@ -28,15 +28,27 @@ spec:
       containers:
         - name: loopback-setup
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
           command:
             - /bin/sh
             - -c
             - |
               set -e
               {{- range .Values.devices }}
-              DEVICE="{{ .path }}"
-              FILE="{{ .file }}"
-              SIZE_MB="{{ .sizeMB }}"
+              DEVICE={{ .path | quote }}
+              FILE={{ .file | quote }}
+              SIZE_MB={{ .sizeMB | quote }}
+              LOOP_MINOR="${DEVICE#/dev/loop}"
+              case "$LOOP_MINOR" in
+                ""|*[!0-9]*)
+                  echo "invalid loop device path: $DEVICE" >&2
+                  exit 1
+                  ;;
+              esac
+              if [ -e "$DEVICE" ] && [ ! -b "$DEVICE" ]; then
+                echo "$DEVICE exists but is not a block device" >&2
+                exit 1
+              fi
               if losetup "$DEVICE" 2>/dev/null; then
                 echo "$DEVICE already attached, skipping"
               else
@@ -45,12 +57,47 @@ spec:
                 if [ ! -f "$FILE" ]; then
                   dd if=/dev/zero of="$FILE" bs=1M seek="$SIZE_MB" count=0
                 fi
-                losetup "$DEVICE" "$FILE"
-                echo "$DEVICE attached to $FILE (${SIZE_MB}MB sparse)"
+                ATTACHED=false
+                if [ ! -b "$DEVICE" ]; then
+                  ERROR_FILE="/tmp/losetup-${LOOP_MINOR}.err"
+                  # util-linux registers the exact minor with LOOP_CTL_ADD.
+                  if losetup "$DEVICE" "$FILE" 2>"$ERROR_FILE"; then
+                    ATTACHED=true
+                  elif [ -e "/sys/dev/block/7:$LOOP_MINOR" ]; then
+                    # udev normally creates this node after LOOP_CTL_ADD. Some
+                    # containerized nodes, including kind, do not run udev.
+                    if ! mknod "$DEVICE" b 7 "$LOOP_MINOR" 2>/dev/null &&
+                      [ ! -b "$DEVICE" ]; then
+                      cat "$ERROR_FILE" >&2
+                      exit 1
+                    fi
+                    echo "$DEVICE registered through /dev/loop-control"
+                  else
+                    cat "$ERROR_FILE" >&2
+                    exit 1
+                  fi
+                  rm -f "$ERROR_FILE"
+                fi
+                if [ "$ATTACHED" = false ]; then
+                  losetup "$DEVICE" "$FILE"
+                fi
+                chmod 0660 "$DEVICE"
+                echo "$DEVICE registered and attached to $FILE (${SIZE_MB}MB sparse)"
               fi
               {{- end }}
               echo "All devices ready"
               exec sleep infinity
+          startupProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -ec
+                - |
+                  {{- range .Values.devices }}
+                  losetup {{ .path | quote }} >/dev/null
+                  {{- end }}
+            periodSeconds: 2
+            failureThreshold: 30
           securityContext:
             privileged: true
           volumeMounts:
