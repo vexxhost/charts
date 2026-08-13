@@ -1,0 +1,83 @@
+replicaCount: 1
+
+image:
+  repository: quay.io/keycloak/keycloak-operator
+  pullPolicy: IfNotPresent
+  # Defaults to the chart appVersion when empty.
+  tag: ""
+  # Optional image digest, for example sha256:deadbeef.
+  digest: ""
+
+keycloakImage:
+  repository: quay.io/keycloak/keycloak
+  # Defaults to the chart appVersion when empty.
+  tag: ""
+  # Optional image digest, for example sha256:deadbeef.
+  digest: ""
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+crds:
+  create: true
+  annotations: {}
+
+serviceAccount:
+  create: true
+  automountServiceAccountToken: true
+  annotations: {}
+  labels: {}
+  name: ""
+
+rbac:
+  create: true
+
+service:
+  type: ClusterIP
+  port: 80
+  annotations: {}
+  labels: {}
+
+podAnnotations: {}
+podLabels: {}
+
+podSecurityContext: {}
+securityContext: {}
+
+resources:
+  limits:
+    cpu: 700m
+    memory: 450Mi
+  requests:
+    cpu: 300m
+    memory: 450Mi
+
+livenessProbe:
+  initialDelaySeconds: 5
+  periodSeconds: 10
+  successThreshold: 1
+  timeoutSeconds: 10
+  failureThreshold: 3
+
+readinessProbe:
+  initialDelaySeconds: 5
+  periodSeconds: 10
+  successThreshold: 1
+  timeoutSeconds: 10
+  failureThreshold: 3
+
+startupProbe:
+  initialDelaySeconds: 5
+  periodSeconds: 10
+  successThreshold: 1
+  timeoutSeconds: 10
+  failureThreshold: 3
+
+additionalEnv: []
+
+priorityClassName: ""
+nodeSelector: {}
+tolerations: []
+affinity: {}
+topologySpreadConstraints: []

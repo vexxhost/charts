@@ -1,0 +1,16 @@
+crds:
+  annotations:
+    charts.vexxhost.com/upgrade-test: before
+
+# Selector labels must take precedence over conflicting custom pod labels.
+podLabels:
+  app.kubernetes.io/name: overridden-by-selector
+  app.kubernetes.io/instance: overridden-by-selector
+  charts.vexxhost.com/test: custom-label-preserved
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 256Mi
+  limits:
+    memory: 512Mi
