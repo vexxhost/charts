@@ -1,4 +1,7 @@
 chart-dirs:
   - charts
 
+chart-repos:
+  - cnpg-grafana=https://cloudnative-pg.github.io/grafana-dashboards
+
 validate-maintainers: false

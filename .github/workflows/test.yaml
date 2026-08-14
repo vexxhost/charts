@@ -3,7 +3,9 @@ name: Test
 on:
   pull_request:
     paths:
-      - "charts/**"
+      - "charts/keycloak-operator/**"
+      - "charts/loopback-block/**"
+      - ".github/workflows/test.yaml"
       - "ct.yaml"
 
 permissions:

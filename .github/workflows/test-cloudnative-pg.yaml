@@ -1,0 +1,124 @@
+name: Test cloudnative-pg
+
+on:
+  pull_request:
+    paths:
+      - "charts/cloudnative-pg/**"
+      - "vendors/cloudnative-pg.yaml"
+      - "vendors/cloudnative-pg/**"
+      - ".github/workflows/test-cloudnative-pg.yaml"
+
+permissions:
+  contents: read
+
+jobs:
+  cloudnative-pg:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Install Helm
+        uses: azure/setup-helm@dda3372f752e03dde6b3237bc9431cdc2f7a02a2 # v5.0.0
+        with:
+          version: v3.21.0
+
+      - name: Create Kubernetes 1.28.13 kind cluster
+        uses: helm/kind-action@ef37e7f390d99f746eb8b610417061a60e82a6cc # v1.14.0
+        with:
+          version: v0.24.0
+          node_image: kindest/node:v1.28.13@sha256:45d319897776e11167e4698f6b14938eb4d52eb381d9e3d7a9086c16c69a8110
+          kubectl_version: v1.28.13
+          cluster_name: chart-testing-cloudnative-pg-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Install upstream chart
+        run: |
+          curl --fail --location --retry 3 \
+            https://github.com/cloudnative-pg/charts/releases/download/cloudnative-pg-v0.27.1/cloudnative-pg-0.27.1.tgz \
+            --output /tmp/cloudnative-pg-0.27.1.tgz
+          echo "67d7189f93219d355630ff7690169121cf606e67ac84abe05c53f88788de9d49  /tmp/cloudnative-pg-0.27.1.tgz" | \
+            sha256sum --check
+          helm install cloudnative-pg /tmp/cloudnative-pg-0.27.1.tgz \
+            --namespace cnpg-system \
+            --create-namespace \
+            --wait \
+            --timeout 5m
+          test "$(kubectl get crd clusters.postgresql.cnpg.io \
+            --output jsonpath='{.metadata.annotations.controller-gen\.kubebuilder\.io/version}')" \
+            = "v0.20.0"
+
+      - name: Upgrade to patched chart
+        run: |
+          helm upgrade cloudnative-pg charts/cloudnative-pg \
+            --namespace cnpg-system \
+            --wait \
+            --timeout 5m
+          kubectl rollout status deployment/cloudnative-pg \
+            --namespace cnpg-system \
+            --timeout=5m
+          test "$(kubectl get deployment cloudnative-pg \
+            --namespace cnpg-system \
+            --output jsonpath='{.spec.template.spec.containers[0].image}')" \
+            = "ghcr.io/cloudnative-pg/cloudnative-pg:1.28.4"
+
+      - name: Verify CRDs and EndpointSlice permissions
+        run: |
+          crds=(
+            backups.postgresql.cnpg.io
+            clusterimagecatalogs.postgresql.cnpg.io
+            clusters.postgresql.cnpg.io
+            databases.postgresql.cnpg.io
+            failoverquorums.postgresql.cnpg.io
+            imagecatalogs.postgresql.cnpg.io
+            poolers.postgresql.cnpg.io
+            publications.postgresql.cnpg.io
+            scheduledbackups.postgresql.cnpg.io
+            subscriptions.postgresql.cnpg.io
+          )
+          for crd in "${crds[@]}"; do
+            kubectl wait --for=condition=Established --timeout=60s "crd/$crd"
+          done
+          test "$(kubectl get crd clusters.postgresql.cnpg.io \
+            --output jsonpath='{.metadata.annotations.controller-gen\.kubebuilder\.io/version}')" \
+            = "v0.21.0"
+          test "$(kubectl auth can-i get endpointslices.discovery.k8s.io \
+            --as=system:serviceaccount:cnpg-system:cloudnative-pg \
+            --all-namespaces)" = "yes"
+          test "$(kubectl auth can-i list endpointslices.discovery.k8s.io \
+            --as=system:serviceaccount:cnpg-system:cloudnative-pg \
+            --all-namespaces)" = "yes"
+          test "$(kubectl auth can-i watch endpointslices.discovery.k8s.io \
+            --as=system:serviceaccount:cnpg-system:cloudnative-pg \
+            --all-namespaces)" = "yes"
+
+      - name: Verify repeatable server-side CRD upgrades
+        run: |
+          for attempt in 1 2; do
+            helm template cloudnative-pg charts/cloudnative-pg \
+              --namespace cnpg-system \
+              --show-only templates/crds/crds.yaml | \
+              kubectl apply --server-side --force-conflicts \
+                --field-manager=cloudnative-pg-chart-test \
+                --filename -
+          done
+
+      - name: Verify CRDs are retained after uninstall
+        run: |
+          helm uninstall cloudnative-pg --namespace cnpg-system
+          kubectl get crd \
+            backups.postgresql.cnpg.io \
+            clusterimagecatalogs.postgresql.cnpg.io \
+            clusters.postgresql.cnpg.io \
+            databases.postgresql.cnpg.io \
+            failoverquorums.postgresql.cnpg.io \
+            imagecatalogs.postgresql.cnpg.io \
+            poolers.postgresql.cnpg.io \
+            publications.postgresql.cnpg.io \
+            scheduledbackups.postgresql.cnpg.io \
+            subscriptions.postgresql.cnpg.io

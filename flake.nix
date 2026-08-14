@@ -16,6 +16,7 @@
             kubernetes-helm
             oras
             cosign
+            gnupg
           ];
         };
       }

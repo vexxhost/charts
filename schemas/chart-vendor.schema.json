@@ -1,0 +1,118 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/vexxhost/charts/schemas/chart-vendor.schema.json",
+  "title": "Vendored Chart Manifest",
+  "description": "Schema for reproducibly generating patched Helm charts from verified upstream releases",
+  "type": "object",
+  "required": ["name", "upstreamVersion", "destination", "source", "patches"],
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z0-9-]+$"
+    },
+    "upstreamVersion": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "destination": {
+      "type": "string",
+      "pattern": "^charts/[a-z0-9-]+$"
+    },
+    "source": {
+      "type": "object",
+      "required": ["chart", "provenance", "key"],
+      "properties": {
+        "chart": {
+          "$ref": "#/$defs/checksummedDownload"
+        },
+        "provenance": {
+          "$ref": "#/$defs/checksummedDownload"
+        },
+        "key": {
+          "$ref": "#/$defs/signingKey"
+        }
+      },
+      "additionalProperties": false
+    },
+    "references": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/namedDownload"
+      }
+    },
+    "crdReference": {
+      "type": "string",
+      "pattern": "^[a-z0-9.-]+\\.ya?ml$"
+    },
+    "patches": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "pattern": "^vendors/[a-z0-9-]+/patches/[a-zA-Z0-9._-]+\\.patch$"
+      }
+    }
+  },
+  "$defs": {
+    "checksummedDownload": {
+      "type": "object",
+      "required": ["url", "sha256"],
+      "properties": {
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "pattern": "^https://"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      },
+      "additionalProperties": false
+    },
+    "namedDownload": {
+      "type": "object",
+      "required": ["name", "url", "sha256"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z0-9.-]+$"
+        },
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "pattern": "^https://"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      },
+      "additionalProperties": false
+    },
+    "signingKey": {
+      "type": "object",
+      "required": ["url", "sha256", "fingerprint"],
+      "properties": {
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "pattern": "^https://"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "fingerprint": {
+          "type": "string",
+          "pattern": "^[A-F0-9]{40}$"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}
