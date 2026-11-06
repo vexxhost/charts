@@ -1,0 +1,28 @@
+replicaCount: 1
+
+configMap:
+  data:
+    SUNRISE_DASHBOARD_URL: https://sunrise.example.test
+    SUNRISE_COLOR_PALETTE: sunrise
+    SUNRISE_OBJECT_STORAGE_BACKENDS: swift
+    SUNRISE_SESSION_BACKEND: cookie
+    KEYSTONE_API: http://keystone-api.openstack.svc:5000
+    KEYSTONE_PUBLIC_API: https://identity.example.test
+    KEYSTONE_FEDERATION_IDENTITY_PROVIDERS: demo
+    SUNRISE_KEYCLOAK_ISSUER_DEMO: https://keycloak.example.test/realms/demo
+    SUNRISE_KEYCLOAK_CLIENT_ID_DEMO: sunrise-server
+
+secret:
+  create: true
+  stringData:
+    SUNRISE_SESSION_SECRET: test-only-session-secret-with-32-characters
+    SUNRISE_KEYCLOAK_CLIENT_SECRET_DEMO: test-only-client-secret
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    memory: 512Mi
+
+terminationDrainSeconds: 0
